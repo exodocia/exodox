@@ -1,22 +1,6 @@
 use combine::error::StringStreamError;
-use combine::parser::char::{
-    alpha_num,
-    char,
-    letter,
-    space,
-};
-use combine::{
-    any,
-    many,
-    many1,
-    none_of,
-    optional,
-    satisfy,
-    skip_count,
-    token,
-    Parser,
-    Stream,
-};
+use combine::parser::char::{char, letter, space};
+use combine::{any, many, many1, optional, skip_count, token, Parser};
 use std::collections::LinkedList;
 use std::fs;
 use std::path::PathBuf;
@@ -48,10 +32,7 @@ fn to_source_elements(source_text: String) -> Source {
     for source_line in source_text.lines() {
         if source_line.trim().starts_with(doc_prefix) {
             source_lines.push_back(SourceHunk::Doc(
-                source_line
-                    .trim_start_matches(doc_prefix)
-                    .trim()
-                    .to_owned(),
+                source_line.trim_start_matches(doc_prefix).trim().to_owned(),
             ));
         } else {
             source_lines.push_back(SourceHunk::Code(source_line.to_owned()));
@@ -129,9 +110,9 @@ struct DocEntry {
 
 impl DocEntry {
     fn parse_from(text: &str) -> Result<LinkedList<DocEntry>, StringStreamError> {
-        let mut implicite_brief = many::<String, _ , _>(any::<&str>()).skip(char('@'));
+        let implicite_brief = many::<String, _, _>(any::<&str>()).skip(char('@'));
 
-        let mut entry = skip_count(1, token('@'))
+        let entry = skip_count(1, token('@'))
             .with(many1::<String, _, _>(letter()))
             .skip(space())
             .skip(space())
@@ -141,17 +122,19 @@ impl DocEntry {
                 content: content.to_owned(),
             });
 
-        let mut entries = optional(implicite_brief).and(many(entry))
-            .map(
-                |(iml_brief_text, rest_entries): (Option<String>, LinkedList<DocEntry>)| {
-                    let mut res = rest_entries.clone();
-                    if let Some(brief_text) = iml_brief_text {
-                        res.push_front(DocEntry {name: "brief".to_owned(), content: brief_text});
-                    }
-
-                    res
+        let mut entries = optional(implicite_brief).and(many(entry)).map(
+            |(iml_brief_text, rest_entries): (Option<String>, LinkedList<DocEntry>)| {
+                let mut res = rest_entries.clone();
+                if let Some(brief_text) = iml_brief_text {
+                    res.push_front(DocEntry {
+                        name: "brief".to_owned(),
+                        content: brief_text,
+                    });
                 }
-            );
+
+                res
+            },
+        );
 
         entries.parse(text).map(|x| x.0)
     }
@@ -167,12 +150,10 @@ impl Entry {
     fn from(hunk: SourceHunk) -> Entry {
         match hunk {
             SourceHunk::Code(text) => Entry::Code(text),
-            SourceHunk::Doc(text) => Entry::Doc(
-                match DocEntry::parse_from(&text) {
-                    Ok(entries) => entries,
-                    Err(error_text) => panic!("Oops {:?}", error_text),
-                }
-            ),
+            SourceHunk::Doc(text) => Entry::Doc(match DocEntry::parse_from(&text) {
+                Ok(entries) => entries,
+                Err(error_text) => panic!("Oops {:?}", error_text),
+            }),
         }
     }
 }
@@ -187,6 +168,6 @@ fn main() {
 
     let parts_of_source = meld_neighbors(to_source_elements(content));
     for part in parts_of_source {
-        println!("-> {:?}", part);
+        println!("-> {:?}", Entry::from(part));
     }
 }
